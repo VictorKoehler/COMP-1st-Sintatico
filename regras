@@ -1,0 +1,143 @@
+/* Syntax convention */
+/* Rules declared like name ={ ... } */
+/* Reserved keywords like #name */
+/* Identificators like $id */
+/* Subrules invoked by @rulename */
+
+program ={
+    #program $id #;
+    @declaracoes_variaveis
+    @declaracoes_de_subprogramas
+    @comando_composto
+    #.
+}
+
+declaracoes_variaveis ={
+    #var @lista_declaracoes_variaveis
+|   £
+}
+
+lista_declaracoes_variaveis ={
+    @lista_declaracoes_variaveis @lista_de_identificadores #: @tipo #;
+|   @lista_de_identificadores #: @tipo #;
+}
+
+lista_de_identificadores ={
+    $id
+|   @lista_de_identificadores #, $id
+}
+
+tipo ={
+    #integer
+|   #real
+|   #boolean
+}
+
+declaracoes_de_subprogramas ={
+    @declaracoes_de_subprogramas @declaracao_de_subprograma #;
+|   £
+}
+
+declaracao_de_subprograma ={
+    #procedure $id @argumentos #;
+    @declaracoes_variaveis
+    @declaracoes_de_subprogramas
+    @comando_composto
+}
+
+argumentos ={
+    #( @lista_de_parametros #)
+|   £
+}
+
+lista_de_parametros ={
+    @lista_de_identificadores #: @tipo 
+|   @lista_de_parametros #; @lista_de_identificadores #: @tipo
+}
+
+comando_composto ={
+    #begin
+    @comandos_opcionais 
+    #end
+}
+
+comandos_opcionais ={
+    @lista_de_comandos 
+|   £
+}
+
+lista_de_comandos ={
+    @comando 
+|   @lista_de_comandos #; @comando 
+}
+
+comando ={
+    @variavel #:= @expressao 
+|   @ativacao_de_procedimento 
+|   @comando_composto 
+|   #if @expressao #then @comando @parte_else
+|   #while @expressao #do @comando
+}
+
+parte_else ={
+    #else @comando 
+|   £
+}
+
+variavel ={
+    $id
+}
+
+ativacao_de_procedimento ={
+    $id 
+|   $id #( @lista_de_expressoes #)
+}
+
+lista_de_expressoes ={
+    @expressao x
+|   @lista_de_epressoes #, @expressao
+}
+
+expressao ={
+    @expressao_simples 
+|   @expressao_simples @op_relacional @expressao_simples
+}
+
+expressao_simples ={
+    @termo 
+|   @sinal @termo 
+|   @expressao_simples @op_aditivo @termo
+}
+
+termo ={
+    @fator 
+|   @termo @op_multiplicativo @fator
+}
+
+fator ={
+    $id 
+|   $id #( @lista_de_expressoes #) 
+|   #num_int
+|   #num_real 
+|   #true 
+|   #false 
+|   #( @expressao #) 
+|   #not @fator
+}
+
+sinal ={
+    #+ | #-
+}
+
+op_relacional ={
+    #= | #< | #> | #<= | #>= | #<>
+}
+
+op_aditivo ={
+    #+ | #- | #or
+}
+
+op_multiplicativo ={
+    #* | #/ | #and
+}
+
