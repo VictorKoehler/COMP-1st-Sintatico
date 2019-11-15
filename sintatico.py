@@ -1,22 +1,127 @@
-from rules_reader import read_rules
-from sys import argv
+from rules_reader import read_rules, empty_char
+from sys import argv, stderr
 
-def parse_rule(inpc, rules, rule):
-    rules[1][rules[0][rule]]['expr_rules']
+
+def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, recpath = ''):
+    '''Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
+    Recebe o conjunto de regras (rules) e o nome da regra a ser interpretada (label).
+    Também recebe, opcionalmente, um caminho completo da recursividade em string e
+    um dicionário contendo as terminações ambíguas demarcadas por este caminho recursivo.
+    parse_permutations utiliza estes dois últimos parâmetros para permutar as combinações ambíguas
+    até encontrar alguma terminação que gere algum resultado viável.
+    Retorna uma lista de produções, se for viável; uma lista vazia (caso a regra tenha uma terminação vazia);
+    ou None caso não seja possível aplicar esta regra na entrada.
+    '''
+    exprules = rules[1][rules[0][label]]["expr_rules"]
+
+    def is_empty_rule(rs):
+        return len(rs) == 1 and rs[0] == empty_char
+
+    productions = []
+    for rs in exprules: # Para cada alternativa de expansão da regra:
+        curs = inpc.copy() # Faça uma cópia de onde está o cursor
+        applies = [] # Salva o que será retornado - se será retornado.
+        for r in rs: # Para cada palavra da alternativa
+
+            # Verifica se o cursor já chegou no fim do arquivo.
+            if curs["cursor"] >= len(inpdata):
+                applies = None # Se sim, aborta a regra.
+                break
+            c = inpdata[curs["cursor"]] # Token lido
+            rh = r[0] # Sinal (@#$%£)
+            rt = r[1:] # Palavra
+
+            act = {
+                "#": (c["token"] == rt and c["class"] != "identificador", r),
+                "$": (c["class"] == "identificador", "$" + c["token"]),
+                "%": (c["class"] == rt, r + "%" + c["token"])
+            }
+            act_g = act.get(rh, None)
+
+            if not act_g is None: # Sinal/Token simples: Identificador/Reservado/Aditivo/Classe/etc
+                if act_g[0]: # Se satisfaz o sinal, o token é aceito
+                    applies.append(act_g[1])
+                    curs["cursor"] += 1
+                else: # Senão, reverte.
+                    applies = None
+                    break
+            
+            elif rh == "@": # Invocação de outra regra
+                reapp = parse_rule_label(curs, inpdata, rules, rt, recsel, '->'.join([recpath, label, str(exprules.index(rs)), r]))
+                if reapp is None: # Se a regra não pode ser derivada, aborta esta expansão.
+                    applies = None
+                    break
+                elif len(reapp) > 0: # Senão, adiciona a expansão.
+                    applies.append(reapp)
+            elif rh != empty_char: # Token inválido: aborta a expansão.
+                applies = None
+                break
+        if applies is None: # Se a expansão foi abortada, tenta outra regra alternativa.
+            continue
+        productions.append((applies, curs, r, rs, label)) # Senão, diz que o label produz esta expansão.
+
+    if len(productions) > 1: # Se há mais de uma expansão, temos uma ambiguidade!
+        s = recsel.get(recpath, None)
+        if s is None: # Se a ambiguidade ainda não foi detectada, registramos-na.
+            print('Ambiguidade detectada! Revise as regras e o modelo de saída.', file=stderr)
+            s = (0, len(productions)) # Por padrão, vamos tentar resolver o modelo
+            recsel[recpath] = s #       usando a primeira correspondência encontrada.
+        # Se a solução se demonstrar inviavel, parse_permutations irá alterar o valor padrão
+        # na tentativa de encontrar alguma solução viável.
+        inpc["cursor"] = productions[s[0]][1]["cursor"] # Reposicionamos o cursor
+        return productions[s[0]] # Retornamos uma das expansões.
+    
+    elif len(productions) == 0: # Se o label não produz nenhuma expansão.
+        hasempty = len([x for x in exprules if is_empty_rule(x)]) > 0
+        if hasempty: # Verificamos se existe a regra vazia no conjunto
+            return [] # Se sim, retorna uma produção vazia.
+        return None # Se não, retorna que a produção é inviavel.
+    else: # Se há apenas uma produção, retorna-a.
+        inpc["cursor"] = productions[0][1]["cursor"] # Reposiciona o cursor
+        return productions[0] # Retorna a expansão.
+
+def parse_permutations(inpdata, rules, psel={}):
+    '''Tenta interpretar um programa inserido (inpdata) usando as regras fornecidas (rules) através de
+    sucessivas interações entre os resultados ambíguos.
+    Retorna assim que encontra algum resultado viável. Se não encontrar, retorna None.
+    '''
+    inpcursor = { "cursor": 0 }
+    locked = psel.keys()
+    ps = psel.copy()
+    r = parse_rule_label(inpcursor, inpdata, rules, "program", ps)
+    if not r is None:
+        return r
+    for p in ps:
+        if not p in locked:
+            l = ps[p][1]
+            for i in range(ps[p][0] + 1, l):
+                ps[p] = (i, l)
+                rec = parse_permutations(inpdata, rules, ps)
+                if not rec is None:
+                    return rec
+    return None
 
 def parse_program(inp, rules):
-    inpc = {'data': inp.strip().split('\n'), 'cursor': 0}
-    return parse_rule(inpc, rules, 'program')
+    '''Invoca parse_permutations, recebendo a entrada (pre-processada pelo analisador léxico)
+    e o conjunto de regras.
+    '''
+    def pdt2dict(d):
+        dt = d.split("|")
+        return {"token": dt[0], "class": dt[1], "line": dt[2]}
+
+    return parse_permutations([pdt2dict(d) for d in inp.strip().split("\n")], rules)
+
 
 if __name__ == "__main__":
-    '''Por padrão, ou recebe o arquivo de entrada como argumento da linha de comando, ou lê o caminho da entrada padrão.
-    '''
-    rules = read_rules(raiseOnLeftRecursion= (not '-r' in argv))
+    """Por padrão, ou recebe o arquivo de entrada como argumento da linha de comando, ou lê o caminho da entrada padrão.
+    """
+    rules = read_rules(raiseOnLeftRecursion=(not "-r" in argv))
     inp = argv[1] if len(argv) >= 2 else input()
-    with open(inp, 'r') as f:
+    with open(inp, "r") as f:
         inp = f.read()
     p0 = parse_program(inp, rules)
-    
+    print(p0)
+
     # if '-u' in argv:
     #     for i in p0:
     #         print('{}|{}|{}'.format(i['token'], i['state'], i['linecounter']))
