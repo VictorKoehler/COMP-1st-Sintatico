@@ -4,6 +4,7 @@ clear
 /* Rules declared like name ={ ... } */
 /* Reserved keywords like #name */
 /* Identificators like $id */
+/* Classes of tokens like %rulename */
 /* Subrules invoked by @rulename */
 
 program ={
@@ -143,8 +144,8 @@ termo_linha ={
 fator ={
     $id 
 |   $id #( @lista_de_expressoes #) 
-|   #num_int
-|   #num_real 
+|   %inteiro
+|   %real 
 |   #true 
 |   #false 
 |   #( @expressao #) 
