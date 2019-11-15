@@ -1,5 +1,7 @@
 import re
 
+empty_char = '£'
+
 def read_rules(filename='regras', raiseOnLeftRecursion=True):
     plain = None
     with open(filename, 'r') as f:
@@ -14,7 +16,8 @@ def read_rules(filename='regras', raiseOnLeftRecursion=True):
         
         def map_rule(r):
             def map_rule_item(ri):
-                if ri[0] != '#' and ri[0] != '@' and ri[0] != '$' and ri != '£':
+                specialchars = '#@$%'
+                if not ri[0] in specialchars and ri != empty_char:
                     raise Exception('Invalid rule of {}: {} ({})'.format(ret['name'], r, ri))
                 return ri
             

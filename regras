@@ -82,11 +82,16 @@ comandos_opcionais ={
 }
 
 lista_de_comandos ={
-    @comando @lista_de_comandos_linha
+    @comando @lista_de_comandos_int
+}
+
+lista_de_comandos_int ={
+    #; @lista_de_comandos_linha
+|   £
 }
 
 lista_de_comandos_linha ={
-    #; @comando @lista_de_comandos_linha
+    @comando #; @lista_de_comandos_linha
 |   £
 }
 
