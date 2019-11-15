@@ -1,4 +1,6 @@
-/* Syntax convention */
+/* Syntax convention
+clear
+*/
 /* Rules declared like name ={ ... } */
 /* Reserved keywords like #name */
 /* Identificators like $id */
@@ -94,7 +96,7 @@ ativacao_de_procedimento ={
 }
 
 lista_de_expressoes ={
-    @expressao x
+    @expressao
 |   @lista_de_epressoes #, @expressao
 }
 
