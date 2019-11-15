@@ -20,13 +20,21 @@ declaracoes_variaveis ={
 }
 
 lista_declaracoes_variaveis ={
-    @lista_declaracoes_variaveis @lista_de_identificadores #: @tipo #;
-|   @lista_de_identificadores #: @tipo #;
+    @lista_de_identificadores #: @tipo #; @lista_declaracoes_variaveis_linha
+}
+
+lista_declaracoes_variaveis_linha ={
+    @lista_de_identificadores #: @tipo #; @lista_declaracoes_variaveis_linha
+|   £
 }
 
 lista_de_identificadores ={
-    $id
-|   @lista_de_identificadores #, $id
+    $id @lista_de_identificadores_linha
+}
+
+lista_de_identificadores_linha ={
+    #, $id @lista_de_identificadores_linha
+|   £
 }
 
 tipo ={
@@ -36,7 +44,7 @@ tipo ={
 }
 
 declaracoes_de_subprogramas ={
-    @declaracoes_de_subprogramas @declaracao_de_subprograma #;
+    @declaracao_de_subprograma #; @declaracoes_de_subprogramas
 |   £
 }
 
@@ -53,8 +61,12 @@ argumentos ={
 }
 
 lista_de_parametros ={
-    @lista_de_identificadores #: @tipo 
-|   @lista_de_parametros #; @lista_de_identificadores #: @tipo
+    @lista_de_identificadores #: @tipo @lista_de_parametros_linha
+}
+
+lista_de_parametros_linha ={
+    #; @lista_de_identificadores #: @tipo @lista_de_parametros_linha
+|   £
 }
 
 comando_composto ={
@@ -69,8 +81,12 @@ comandos_opcionais ={
 }
 
 lista_de_comandos ={
-    @comando 
-|   @lista_de_comandos #; @comando 
+    @comando @lista_de_comandos_linha
+}
+
+lista_de_comandos_linha ={
+    #; @comando @lista_de_comandos_linha
+|   £
 }
 
 comando ={
@@ -106,14 +122,22 @@ expressao ={
 }
 
 expressao_simples ={
-    @termo 
-|   @sinal @termo 
-|   @expressao_simples @op_aditivo @termo
+    @termo @expressao_simples_linha
+|   @sinal @termo @expressao_simples_linha
+}
+
+expressao_simples_linha ={
+    @op_aditivo @termo @expressao_simples_linha
+|   £
 }
 
 termo ={
-    @fator 
-|   @termo @op_multiplicativo @fator
+    @fator @termo_linha
+}
+
+termo_linha ={
+    @op_multiplicativo @fator @termo_linha
+|   £
 }
 
 fator ={
