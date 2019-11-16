@@ -69,7 +69,7 @@ def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, r
         s = recsel.get(recpath, None)
         if s is None: # Se a ambiguidade ainda não foi detectada, registramos-na.
             print('Ambiguidade detectada! Revise as regras e o modelo de saída.', file=stderr)
-            s = (0, len(productions)) # Por padrão, vamos tentar resolver o modelo
+            s = (0, len(productions), label, recpath, productions) # Por padrão, vamos tentar resolver o modelo
             recsel[recpath] = s #       usando a primeira correspondência encontrada.
         # Se a solução se demonstrar inviavel, parse_permutations irá alterar o valor padrão
         # na tentativa de encontrar alguma solução viável.
@@ -90,19 +90,24 @@ def parse_permutations(inpdata, rules, psel={}, *args, **kwargs):
     Retorna assim que encontra algum resultado viável. Se não encontrar, retorna None.
     '''
     inpcursor = { "cursor": 0 }
-    locked = psel.keys()
-    ps = psel.copy()
+    locked = psel.keys() # Marca as ambiguidades que esse método não deve mexer (pois o método é recursivo)
+    ps = psel.copy() # Faça uma cópia completa do dicionário de ambiguidades e passa-o para o método
+
+    # Cada ambiguidade de ps consiste de um endereço completo das derivações das regras.
     r = parse_rule_label(inpcursor, inpdata, rules, "program", ps, *args, **kwargs)
-    if not r is None:
+    if not r is None: # Se o método foi bem sucedido, retorna-o!
         return r
-    for p in ps:
-        if not p in locked:
-            l = ps[p][1]
-            for i in range(ps[p][0] + 1, l):
-                ps[p] = (i, l)
-                rec = parse_permutations(inpdata, rules, ps, *args, **kwargs)
-                if not rec is None:
+
+    for p in ps: # Senão, olha todas as ambiguidades e permuta-as.
+        if not p in locked: # Se a atual pilha pode mexer na ambiguidade
+            l = ps[p][1] # Número de ambiguidades para este endereço.
+            o = ps[p][0] # Qual ambiguidade foi escolhida.
+            for i in range(o + 1, l): # Para cada possível ambiguidade, itere sobre as possíveis ramificações
+                ps[p] = (i, l) # Mude a ramificação e chame o método recursivamente.
+                rec = parse_permutations(inpdata, rules, ps.copy(), *args, **kwargs)
+                if not rec is None: # Se houve sucesso, simplesmente retorna
                     return rec
+            ps[p] = (o, l) # Se não houve sucesso, restaure o estado inicial para a próxima iteração.
     return None
 
 def parse_program(inp, rules, *args, **kwargs):
@@ -111,7 +116,7 @@ def parse_program(inp, rules, *args, **kwargs):
     '''
     def pdt2dict(d):
         dt = d.split("|")
-        return {"token": dt[0], "class": dt[1], "line": dt[2]}
+        return {"token": dt[0], "a": dt[0], "class": dt[1], "line": dt[2]}
 
     return parse_permutations([pdt2dict(d) for d in inp.strip().split("\n")], rules, *args, **kwargs)
 
