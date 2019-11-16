@@ -1,10 +1,12 @@
 from rules_reader import read_rules, empty_char
 from sys import argv, stderr
+import json
 
 
-def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, recpath = ''):
+def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, recpath = '', simple_terminal=False):
     '''Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
     Recebe o conjunto de regras (rules) e o nome da regra a ser interpretada (label).
+    Se simple_terminal=True, então as folhas da árvore serão representadas de maneira simplificada.
     Também recebe, opcionalmente, um caminho completo da recursividade em string e
     um dicionário contendo as terminações ambíguas demarcadas por este caminho recursivo.
     parse_permutations utiliza estes dois últimos parâmetros para permutar as combinações ambíguas
@@ -32,27 +34,29 @@ def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, r
             rt = r[1:] # Palavra
 
             act = {
-                "#": (c["token"] == rt and c["class"] != "identificador", r),
-                "$": (c["class"] == "identificador", "$" + c["token"]),
-                "%": (c["class"] == rt, r + "%" + c["token"])
+                "#": c["token"] == rt and c["class"] != "identificador",
+                "$": c["class"] == "identificador",
+                "%": c["class"] == rt
             }
             act_g = act.get(rh, None)
 
             if not act_g is None: # Sinal/Token simples: Identificador/Reservado/Aditivo/Classe/etc
-                if act_g[0]: # Se satisfaz o sinal, o token é aceito
-                    applies.append(act_g[1])
+                if act_g: # Se satisfaz o sinal, o token é aceito
+                    t = (r + ':' + c['token']) if simple_terminal else { 'symbol': r, 'token': c['token'] }
+                    applies.append(t)
                     curs["cursor"] += 1
                 else: # Senão, reverte.
                     applies = None
                     break
             
             elif rh == "@": # Invocação de outra regra
-                reapp = parse_rule_label(curs, inpdata, rules, rt, recsel, '->'.join([recpath, label, str(exprules.index(rs)), r]))
+                fullpath = '->'.join([recpath, label, str(exprules.index(rs)), r])
+                reapp = parse_rule_label(curs, inpdata, rules, rt, recsel, fullpath, simple_terminal)
                 if reapp is None: # Se a regra não pode ser derivada, aborta esta expansão.
                     applies = None
                     break
                 elif len(reapp) > 0: # Senão, adiciona a expansão.
-                    applies.append(reapp)
+                    applies.append({ 'symbol': r, 'expansion': reapp })
             elif rh != empty_char: # Token inválido: aborta a expansão.
                 applies = None
                 break
@@ -60,6 +64,7 @@ def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, r
             continue
         productions.append((applies, curs, r, rs, label)) # Senão, diz que o label produz esta expansão.
 
+    prodind = 0 # Retorna a única expansão, se possível.
     if len(productions) > 1: # Se há mais de uma expansão, temos uma ambiguidade!
         s = recsel.get(recpath, None)
         if s is None: # Se a ambiguidade ainda não foi detectada, registramos-na.
@@ -68,19 +73,18 @@ def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, r
             recsel[recpath] = s #       usando a primeira correspondência encontrada.
         # Se a solução se demonstrar inviavel, parse_permutations irá alterar o valor padrão
         # na tentativa de encontrar alguma solução viável.
-        inpc["cursor"] = productions[s[0]][1]["cursor"] # Reposicionamos o cursor
-        return productions[s[0]] # Retornamos uma das expansões.
-    
+        prodind = s[0] # Retornamos uma das expansões
+
     elif len(productions) == 0: # Se o label não produz nenhuma expansão.
         hasempty = len([x for x in exprules if is_empty_rule(x)]) > 0
         if hasempty: # Verificamos se existe a regra vazia no conjunto
             return [] # Se sim, retorna uma produção vazia.
         return None # Se não, retorna que a produção é inviavel.
-    else: # Se há apenas uma produção, retorna-a.
-        inpc["cursor"] = productions[0][1]["cursor"] # Reposiciona o cursor
-        return productions[0] # Retorna a expansão.
+    
+    inpc["cursor"] = productions[prodind][1]["cursor"] # Reposiciona o cursor
+    return productions[prodind][0] # Retorna a expansão.
 
-def parse_permutations(inpdata, rules, psel={}):
+def parse_permutations(inpdata, rules, psel={}, *args, **kwargs):
     '''Tenta interpretar um programa inserido (inpdata) usando as regras fornecidas (rules) através de
     sucessivas interações entre os resultados ambíguos.
     Retorna assim que encontra algum resultado viável. Se não encontrar, retorna None.
@@ -88,7 +92,7 @@ def parse_permutations(inpdata, rules, psel={}):
     inpcursor = { "cursor": 0 }
     locked = psel.keys()
     ps = psel.copy()
-    r = parse_rule_label(inpcursor, inpdata, rules, "program", ps)
+    r = parse_rule_label(inpcursor, inpdata, rules, "program", ps, *args, **kwargs)
     if not r is None:
         return r
     for p in ps:
@@ -96,12 +100,12 @@ def parse_permutations(inpdata, rules, psel={}):
             l = ps[p][1]
             for i in range(ps[p][0] + 1, l):
                 ps[p] = (i, l)
-                rec = parse_permutations(inpdata, rules, ps)
+                rec = parse_permutations(inpdata, rules, ps, *args, **kwargs)
                 if not rec is None:
                     return rec
     return None
 
-def parse_program(inp, rules):
+def parse_program(inp, rules, *args, **kwargs):
     '''Invoca parse_permutations, recebendo a entrada (pre-processada pelo analisador léxico)
     e o conjunto de regras.
     '''
@@ -109,21 +113,54 @@ def parse_program(inp, rules):
         dt = d.split("|")
         return {"token": dt[0], "class": dt[1], "line": dt[2]}
 
-    return parse_permutations([pdt2dict(d) for d in inp.strip().split("\n")], rules)
+    return parse_permutations([pdt2dict(d) for d in inp.strip().split("\n")], rules, *args, **kwargs)
 
+
+def print_help_msg(autoexit=True):
+    print('Usage: python sintatico.py [-r -s] {input file} {output file}')
+    print('Or:    python sintatico.py [-r -s] {input file}')
+    print('Or:    python sintatico.py [-r -s] -i {output file}')
+    print('Or:    python sintatico.py [-r -s] -i')
+    print('Or:    python sintatico.py -h|--help')
+    print('Where -r: Supress exceptions on 1-st level left recursion.')
+    print('      -s: Show terminal expansions as strings.')
+    print('      -i: Read input from the stdin.')
+    print('      -h or --help: Show this message.')
+    if autoexit:
+        exit()
 
 if __name__ == "__main__":
     """Por padrão, ou recebe o arquivo de entrada como argumento da linha de comando, ou lê o caminho da entrada padrão.
     """
-    rules = read_rules(raiseOnLeftRecursion=(not "-r" in argv))
-    inp = argv[1] if len(argv) >= 2 else input()
-    with open(inp, "r") as f:
-        inp = f.read()
-    p0 = parse_program(inp, rules)
-    print(p0)
+    if '-h' in argv or '--help' in argv:
+        print_help_msg()
 
-    # if '-u' in argv:
-    #     for i in p0:
-    #         print('{}|{}|{}'.format(i['token'], i['state'], i['linecounter']))
-    # else:
-    #     beauty_print(p0)
+    cargs = list(filter(lambda x: len(x) != 2 or x[0] != '-', argv[1:]))
+    finp, fout = None, None
+
+    if '-i' in argv:
+        finp = ''
+        try:
+            while True:
+                finp += input() + '\n'
+        except EOFError:
+            pass
+    else:
+        if len(cargs) == 0:
+            print_help_msg()
+        finp = cargs.pop(0)
+        with open(finp, "r") as f:
+            finp = f.read()
+    
+    if len(cargs) == 1:
+        fout = cargs[0]
+
+    rules = read_rules(raiseOnLeftRecursion=(not "-r" in argv))
+    p0 = parse_program(finp, rules, simple_terminal=('-s' in argv))
+    p0json = json.dumps(p0)
+
+    if fout is None:
+        print(p0json)
+    else:
+        with open(fout, "w") as f:
+            f.write(p0json)
