@@ -109,7 +109,6 @@ uso_identificador ={
 uso_identificador_term ={
     @atribuicao_variavel
 |   @ativacao_de_procedimento
-|   £
 }
 
 atribuicao_variavel ={
@@ -122,6 +121,7 @@ variavel ={
 
 ativacao_de_procedimento ={
     #( @lista_de_expressoes #)
+|   £
 }
 
 parte_else ={

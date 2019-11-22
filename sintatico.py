@@ -2,18 +2,29 @@ from rules_reader import read_rules, empty_char
 from sys import argv, stderr
 import json
 
-
-def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, recpath = '', simple_terminal=False, loglevel=0):
-    '''Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
+def parse_rule_label(
+    inpc: dict,
+    inpdata: str,
+    rules,
+    label: str,
+    recsel={},
+    recpath="",
+    simple_terminal=False,
+    loglevel=0,
+    emptyExpansion=True,
+):
+    """Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
     Recebe o conjunto de regras (rules) e o nome da regra a ser interpretada (label).
     Se simple_terminal=True, então as folhas da árvore serão representadas de maneira simplificada.
     Também recebe, opcionalmente, um caminho completo da recursividade em string e
     um dicionário contendo as terminações ambíguas demarcadas por este caminho recursivo.
     parse_permutations utiliza estes dois últimos parâmetros para permutar as combinações ambíguas
     até encontrar alguma terminação que gere algum resultado viável.
+    loglevel aumenta o nível de log produzido no stderr.
+    emptyExpansion re-aplica os casos da terminação nula sobre a pilha de recursividade (Experimental, pode dificultar o debug).
     Retorna uma lista de produções, se for viável; uma lista vazia (caso a regra tenha uma terminação vazia);
     ou None caso não seja possível aplicar esta regra na entrada.
-    '''
+    """
     exprules = rules[1][rules[0][label]]["expr_rules"]
 
     def is_empty_rule(rs):
@@ -62,7 +73,11 @@ def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, r
                 break
         if applies is None: # Se a expansão foi abortada, tenta outra regra alternativa.
             continue
-        productions.append((applies, curs, r, rs, label)) # Senão, diz que o label produz esta expansão.
+        elif len(applies) == 0 and emptyExpansion: # Se a expansão é nula, deixe-a nula.
+            productions.append((applies, curs, empty_char, [empty_char], label))
+        else: # Senão, diz que o label produz esta expansão.
+            productions.append((applies, curs, r, rs, label))
+
 
     prodind = 0 # Retorna a única expansão, se possível.
     if len(productions) > 1: # Se há mais de uma expansão, temos uma ambiguidade!
