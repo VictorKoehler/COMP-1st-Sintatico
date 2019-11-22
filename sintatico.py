@@ -3,7 +3,7 @@ from sys import argv, stderr
 import json
 
 
-def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, recpath = '', simple_terminal=False):
+def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, recpath = '', simple_terminal=False, loglevel=0):
     '''Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
     Recebe o conjunto de regras (rules) e o nome da regra a ser interpretada (label).
     Se simple_terminal=True, então as folhas da árvore serão representadas de maneira simplificada.
@@ -68,7 +68,14 @@ def parse_rule_label(inpc: dict, inpdata: str, rules, label: str, recsel = {}, r
     if len(productions) > 1: # Se há mais de uma expansão, temos uma ambiguidade!
         s = recsel.get(recpath, None)
         if s is None: # Se a ambiguidade ainda não foi detectada, registramos-na.
-            print('Ambiguidade detectada! Revise as regras e o modelo de saída.', file=stderr)
+            if loglevel >= 2 and len(productions) == 2 and len([x for x in productions if x[2] == empty_char]) == 1:
+                print('Indício de ambiguidade: Possível caminho vazio não tomado.', file=stderr)
+            elif loglevel >= 1:
+                print('Indício de ambiguidade: Revise as regras e o modelo de saída.', file=stderr)
+                if loglevel >= 3:
+                    for prod in productions:
+                        print('  Em {}=>{{ {} }}=>{}'.format(prod[4], ' '.join(prod[3]), prod[2]))
+                    print('')
             s = (0, len(productions), label, recpath, productions) # Por padrão, vamos tentar resolver o modelo
             recsel[recpath] = s #       usando a primeira correspondência encontrada.
         # Se a solução se demonstrar inviavel, parse_permutations irá alterar o valor padrão
