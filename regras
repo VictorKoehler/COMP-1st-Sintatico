@@ -96,16 +96,24 @@ lista_de_comandos_linha ={
 }
 
 comando ={
-    @variavel #:= @expressao 
-|   @ativacao_de_procedimento 
-|   @comando_composto 
+    @uso_identificador
+|   @comando_composto
 |   #if @expressao #then @comando @parte_else
 |   #while @expressao #do @comando
 }
 
-parte_else ={
-    #else @comando 
+uso_identificador ={
+    $id @uso_identificador_term
+}
+
+uso_identificador_term ={
+    @atribuicao_variavel
+|   @ativacao_de_procedimento
 |   £
+}
+
+atribuicao_variavel ={
+    #:= @expressao
 }
 
 variavel ={
@@ -113,8 +121,12 @@ variavel ={
 }
 
 ativacao_de_procedimento ={
-    $id 
-|   $id #( @lista_de_expressoes #)
+    #( @lista_de_expressoes #)
+}
+
+parte_else ={
+    #else @comando
+|   £
 }
 
 lista_de_expressoes ={
@@ -123,8 +135,12 @@ lista_de_expressoes ={
 }
 
 expressao ={
-    @expressao_simples 
-|   @expressao_simples @op_relacional @expressao_simples
+    @expressao_simples @expressao_term
+}
+
+expressao_term ={
+    @op_relacional @expressao_simples
+|   £
 }
 
 expressao_simples ={
