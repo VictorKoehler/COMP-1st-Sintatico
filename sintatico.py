@@ -12,6 +12,7 @@ def parse_rule_label(
     simple_terminal=False,
     loglevel=0,
     emptyExpansion=True,
+    recLog=None,
 ):
     """Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
     Recebe o conjunto de regras (rules) e o nome da regra a ser interpretada (label).
@@ -29,6 +30,11 @@ def parse_rule_label(
 
     def is_empty_rule(rs):
         return len(rs) == 1 and rs[0] == empty_char
+    
+    if recLog is None:
+        recLog = {}
+    if not 'recpath' in recLog:
+        recLog['recpath'] = ''
 
     productions = []
     for rs in exprules: # Para cada alternativa de expansão da regra:
@@ -62,7 +68,7 @@ def parse_rule_label(
             
             elif rh == "@": # Invocação de outra regra
                 fullpath = '->'.join([recpath, label, str(exprules.index(rs)), r])
-                reapp = parse_rule_label(curs, inpdata, rules, rt, recsel, fullpath, simple_terminal)
+                reapp = parse_rule_label(curs, inpdata, rules, rt, recsel, fullpath, simple_terminal, loglevel, emptyExpansion, recLog)
                 if reapp is None: # Se a regra não pode ser derivada, aborta esta expansão.
                     applies = None
                     break
@@ -101,24 +107,42 @@ def parse_rule_label(
         hasempty = len([x for x in exprules if is_empty_rule(x)]) > 0
         if hasempty: # Verificamos se existe a regra vazia no conjunto
             return [] # Se sim, retorna uma produção vazia.
+
+        # Se acontece algo de errado, grava em um log.
+        if not recLog['recpath'].startswith(recpath):
+            # Este log grava o último erro de um nó folha da árvore, isto é,
+            # se um nó que não é folha encontra este erro, verifica se o último erro registrado não é subfilho dele;
+            # se for subfilho, ignora; se não for, assume que este é um nó folha e define último erro = atual erro.
+            # Isso é feito olhando o caminho completo da recursão (se o último erro registrado foi gerado através desta
+            # recursão, então o erro não deve ser sobrescrito; do contrário, sobrescreve o erro).
+            recLog['recpath'] = recpath
+            recLog['label'] = label
+            recLog['inpc'] = inpc.copy()
+        
         return None # Se não, retorna que a produção é inviavel.
     
     inpc["cursor"] = productions[prodind][1]["cursor"] # Reposiciona o cursor
     return productions[prodind][0] # Retorna a expansão.
 
-def parse_permutations(inpdata, rules, psel={}, *args, **kwargs):
+def parse_permutations(inpdata, rules, psel={}, pcounter=None, *args, **kwargs):
     '''Tenta interpretar um programa inserido (inpdata) usando as regras fornecidas (rules) através de
     sucessivas interações entre os resultados ambíguos.
     Retorna assim que encontra algum resultado viável. Se não encontrar, retorna None.
     '''
     inpcursor = { "cursor": 0 }
+    if pcounter is None:
+        pcounter = { 'counter': 0, 'logs': [] }
     locked = psel.keys() # Marca as ambiguidades que esse método não deve mexer (pois o método é recursivo)
     ps = psel.copy() # Faça uma cópia completa do dicionário de ambiguidades e passa-o para o método
 
     # Cada ambiguidade de ps consiste de um endereço completo das derivações das regras.
-    r = parse_rule_label(inpcursor, inpdata, rules, "program", ps, *args, **kwargs)
+    recLog={}
+    r = parse_rule_label(inpcursor, inpdata, rules, "program", ps, recLog=recLog, *args, **kwargs)
+    pcounter['counter'] += 1
     if not r is None: # Se o método foi bem sucedido, retorna-o!
-        return r
+        if pcounter['counter'] != 1:
+            print('Programa gerado na {}-esima árvore.'.format(pcounter['counter']), file=stderr)
+        return r, pcounter['logs']
 
     for p in ps: # Senão, olha todas as ambiguidades e permuta-as.
         if not p in locked: # Se a atual pilha pode mexer na ambiguidade
@@ -126,11 +150,13 @@ def parse_permutations(inpdata, rules, psel={}, *args, **kwargs):
             o = ps[p][0] # Qual ambiguidade foi escolhida.
             for i in range(o + 1, l): # Para cada possível ambiguidade, itere sobre as possíveis ramificações
                 ps[p] = (i, l) # Mude a ramificação e chame o método recursivamente.
-                rec = parse_permutations(inpdata, rules, ps.copy(), *args, **kwargs)
-                if not rec is None: # Se houve sucesso, simplesmente retorna
+                rec = parse_permutations(inpdata, rules, ps.copy(), pcounter, *args, **kwargs)
+                if not rec[0] is None: # Se houve sucesso, simplesmente retorna
                     return rec
             ps[p] = (o, l) # Se não houve sucesso, restaure o estado inicial para a próxima iteração.
-    return None
+    
+    pcounter['logs'].append(recLog)
+    return None, pcounter['logs']
 
 def parse_program(inp, rules, *args, **kwargs):
     '''Invoca parse_permutations, recebendo a entrada (pre-processada pelo analisador léxico)
@@ -140,7 +166,13 @@ def parse_program(inp, rules, *args, **kwargs):
         dt = d.split("|")
         return {"token": dt[0], "a": dt[0], "class": dt[1], "line": dt[2]}
 
-    return parse_permutations([pdt2dict(d) for d in inp.strip().split("\n")], rules, *args, **kwargs)
+    r, logs = parse_permutations([pdt2dict(d) for d in inp.strip().split("\n")], rules, *args, **kwargs)
+    if r is None:
+        print('Could not generate a valid program.', file=stderr)
+        print('There are {} invalid trees:'.format(len(logs)), file=stderr)
+        print(json.dumps(logs), file=stderr)
+        print('', file=stderr)
+    return r
 
 
 def print_help_msg(autoexit=True):
