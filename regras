@@ -51,6 +51,12 @@ declaracoes_de_subprogramas ={
 
 declaracao_de_subprograma ={
     #procedure $id @argumentos #;
+    @escopo_de_subprograma
+|   #function $id @argumentos #: @tipo #;
+    @escopo_de_subprograma
+}
+
+escopo_de_subprograma ={
     @declaracoes_variaveis
     @declaracoes_de_subprogramas
     @comando_composto
