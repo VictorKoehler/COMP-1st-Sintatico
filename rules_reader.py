@@ -15,14 +15,22 @@ def read_rules(filename='regras', raiseOnLeftRecursion=True):
         ret['name'] = e[:e.index('={')].strip()
         
         def map_rule(r):
-            def map_rule_item(ri):
-                specialchars = '#@$%'
-                if not ri[0] in specialchars and ri != empty_char:
-                    raise Exception('Invalid rule of {}: {} ({})'.format(ret['name'], r, ri))
-                return ri
+            specialchars = '#@$%'
+            rule_cond = True
+            rule = ([],[])
+            for ri in r.split(' '):
+                if len(ri) > 0:
+                    if ri == '=>':
+                        rule_cond = False
+                    if rule_cond:
+                        if not ri[0] in specialchars and ri != empty_char:
+                            raise Exception('Invalid rule of {}: {} ({})'.format(ret['name'], r, ri))
+                        rule[0].append(ri)
+                    else:
+                        rule[1].append(ri)
+
             
-            rule = [map_rule_item(ri) for ri in r.split(' ') if len(ri) > 0]
-            if rule[0] == '@' + ret['name']:
+            if rule[0][0] == '@' + ret['name']:
                 msg = '1st-Level Left Recursion in {}: {}'.format(ret['name'], r)
                 if raiseOnLeftRecursion:
                     raise Exception(msg)

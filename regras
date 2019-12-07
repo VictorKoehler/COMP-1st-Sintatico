@@ -9,9 +9,7 @@ clear
 
 program ={
     #program $id #;
-    @declaracoes_variaveis
-    @declaracoes_de_subprogramas
-    @comando_composto
+    @escopo_de_subprograma
     #.
 }
 
@@ -78,7 +76,7 @@ lista_de_parametros_linha ={
 
 comando_composto ={
     #begin
-    @comandos_opcionais 
+    @comandos_opcionais
     #end
 }
 
@@ -104,21 +102,21 @@ lista_de_comandos_linha ={
 comando ={
     @uso_identificador
 |   @comando_composto
-|   #if @expressao #then @comando @parte_else
-|   #while @expressao #do @comando
+|   #if @expressao:boolean #then @comando @parte_else
+|   #while @expressao:boolean #do @comando
 }
 
 uso_identificador ={
-    $id @uso_identificador_term
+    $id:T @uso_identificador_term:T?
 }
 
 uso_identificador_term ={
-    @atribuicao_variavel
+    @atribuicao_variavel:T => T
 |   @ativacao_de_procedimento
 }
 
 atribuicao_variavel ={
-    #:= @expressao
+    #:= @expressao:T => T
 }
 
 variavel ={
@@ -136,47 +134,54 @@ parte_else ={
 }
 
 lista_de_expressoes ={
-    @expressao
-|   @lista_de_epressoes #, @expressao
+    @expressao @lista_de_expressoes_linha
 }
 
+lista_de_expressoes_linha ={
+    #, @expressao @lista_de_expressoes_linha
+|   £
+}
+
+/* Não é necessário especializar expressao. expressao_term já faz as verificações necessárias. */
 expressao ={
     @expressao_simples @expressao_term
 }
 
 expressao_term ={
-    @op_relacional @expressao_simples
+    @op_relacional @expressao_simples:Number => Number
+|   @op_relacional_ig @expressao_simples:T => T
 |   £
 }
 
 expressao_simples ={
-    @termo @expressao_simples_linha
-|   @sinal @termo @expressao_simples_linha
+    @termo:T @expressao_simples_linha:T => T
+|   @sinal @termo:Number @expressao_simples_linha:Number => Number
 }
 
 expressao_simples_linha ={
-    @op_aditivo @termo @expressao_simples_linha
+    @op_aditivo @termo:Number @expressao_simples_linha:Number => Number
+|   @op_aditivo_or @termo:boolean @expressao_simples_linha:boolean => boolean
 |   £
 }
 
 termo ={
-    @fator @termo_linha
+    @fator:T @termo_linha:T => T
 }
 
 termo_linha ={
-    @op_multiplicativo @fator @termo_linha
+    @op_multiplicativo @fator:Number @termo_linha:Number => Number
+|   @op_multiplicativo_and @fator:boolean @termo_linha:boolean => boolean
 |   £
 }
 
 fator ={
-    $id 
-|   $id #( @lista_de_expressoes #) 
-|   %inteiro
-|   %real 
-|   #true 
-|   #false 
-|   #( @expressao #) 
-|   #not @fator
+    $id:T @ativacao_de_procedimento => T
+|   %inteiro => integer
+|   %real
+|   #true => boolean
+|   #false => boolean
+|   #( @expressao:T #) => T
+|   #not @fator:boolean => boolean
 }
 
 sinal ={
@@ -184,14 +189,26 @@ sinal ={
 }
 
 op_relacional ={
-    #= | #< | #> | #<= | #>= | #<>
+    #< | #> | #<= | #>=
+}
+
+op_relacional_ig ={
+    #= | #<>
 }
 
 op_aditivo ={
-    #+ | #- | #or
+    #+ | #-
+}
+
+op_aditivo_or ={
+    #or
 }
 
 op_multiplicativo ={
-    #* | #/ | #and
+    #* | #/
+}
+
+op_multiplicativo_and ={
+    #and
 }
 

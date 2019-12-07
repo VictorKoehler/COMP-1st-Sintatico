@@ -1,4 +1,5 @@
 from rules_reader import read_rules, empty_char
+from semantico import Semantic, ProgramSemantic, __exception_handler
 from sys import argv, stderr
 import json
 
@@ -13,6 +14,7 @@ def parse_rule_label(
     loglevel=0,
     emptyExpansion=True,
     recLog=None,
+    semantics=None
 ):
     """Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
     Recebe o conjunto de regras (rules) e o nome da regra a ser interpretada (label).
@@ -26,6 +28,9 @@ def parse_rule_label(
     Retorna uma lista de produções, se for viável; uma lista vazia (caso a regra tenha uma terminação vazia);
     ou None caso não seja possível aplicar esta regra na entrada.
     """
+    if simple_terminal:
+        raise Exception('Deprecated: simple_terminal=True')
+
     exprules = rules[1][rules[0][label]]["expr_rules"]
 
     def is_empty_rule(rs):
@@ -35,11 +40,15 @@ def parse_rule_label(
         recLog = {}
     if not 'recpath' in recLog:
         recLog['recpath'] = ''
+    if semantics is None:
+        semantics = ProgramSemantic()
 
     productions = []
-    for rs in exprules: # Para cada alternativa de expansão da regra:
+    for rscoll in exprules: # Para cada alternativa de expansão da regra:
+        rs = rscoll[0]
         curs = inpc.copy() # Faça uma cópia de onde está o cursor
         applies = [] # Salva o que será retornado - se será retornado.
+        sem = semantics.expup(label, rscoll, curs, inpdata, applies)
         for r in rs: # Para cada palavra da alternativa
 
             # Verifica se o cursor já chegou no fim do arquivo.
@@ -48,7 +57,10 @@ def parse_rule_label(
                 break
             c = inpdata[curs["cursor"]] # Token lido
             rh = r[0] # Sinal (@#$%£)
-            rt = r[1:] # Palavra
+            rt = r[1:]
+            if rh != '#':
+                rt = rt.split(':')[0] # Palavra
+            sem = sem.subexpbeg(label, rscoll, curs, inpdata, applies, r)
 
             act = {
                 "#": c["token"] == rt and c["class"] != "identificador",
@@ -59,30 +71,54 @@ def parse_rule_label(
 
             if not act_g is None: # Sinal/Token simples: Identificador/Reservado/Aditivo/Classe/etc
                 if act_g: # Se satisfaz o sinal, o token é aceito
-                    t = (r + ':' + c['token']) if simple_terminal else { 'symbol': r, 'token': c['token'] }
+                    t = None
+                    if simple_terminal:
+                        t = (r + ':' + c['token'])
+                    else:
+                        t = { 'symbol': r, 'token': c['token'], 'class': c['class'] }
+                        sem = sem.subexpterm(label, rscoll, curs, inpdata, applies, r, t)
+                    #print('--Read {} on position {}. Got {} on {} of {}'.format(rt, curs['cursor'], inpdata[curs['cursor']], rs, label))
                     applies.append(t)
                     curs["cursor"] += 1
                 else: # Senão, reverte.
+                    #print('Expected {} on position {}. Got {}'.format(rt, curs['cursor'], inpdata[curs['cursor']]))
                     applies = None
                     break
             
             elif rh == "@": # Invocação de outra regra
-                fullpath = '->'.join([recpath, label, str(exprules.index(rs)), r])
-                reapp = parse_rule_label(curs, inpdata, rules, rt, recsel, fullpath, simple_terminal, loglevel, emptyExpansion, recLog)
+                fullpath = '->'.join([recpath, label, str(exprules.index(rscoll)), r])
+                reapp = parse_rule_label(
+                    curs,
+                    inpdata,
+                    rules,
+                    rt,
+                    recsel=recsel,
+                    recpath=fullpath,
+                    simple_terminal=simple_terminal,
+                    loglevel=loglevel,
+                    emptyExpansion=emptyExpansion,
+                    recLog=recLog,
+                    semantics=sem
+                )
                 if reapp is None: # Se a regra não pode ser derivada, aborta esta expansão.
                     applies = None
                     break
                 elif len(reapp) > 0: # Senão, adiciona a expansão.
-                    applies.append({ 'symbol': r, 'expansion': reapp })
+                    #t = { 'symbol': r, 'expansion': reapp }
+                    reapp['symbol'] = r
+                    if not simple_terminal:
+                        sem = sem.subexpder(label, rscoll, curs, inpdata, applies, r, reapp)
+                    applies.append(reapp)
             elif rh != empty_char: # Token inválido: aborta a expansão.
                 applies = None
                 break
         if applies is None: # Se a expansão foi abortada, tenta outra regra alternativa.
             continue
         elif len(applies) == 0 and emptyExpansion: # Se a expansão é nula, deixe-a nula.
-            productions.append((applies, curs, empty_char, [empty_char], label))
+            productions.append((applies, curs, empty_char, [empty_char], label, None))
         else: # Senão, diz que o label produz esta expansão.
-            productions.append((applies, curs, r, rs, label))
+            typ = sem.subexpfin(label, rscoll, curs, inpdata, applies)
+            productions.append((applies, curs, r, rs, label, typ))
 
 
     prodind = 0 # Retorna a única expansão, se possível.
@@ -106,7 +142,7 @@ def parse_rule_label(
     elif len(productions) == 0: # Se o label não produz nenhuma expansão.
         hasempty = len([x for x in exprules if is_empty_rule(x)]) > 0
         if hasempty: # Verificamos se existe a regra vazia no conjunto
-            return [] # Se sim, retorna uma produção vazia.
+            return {} # Se sim, retorna uma produção vazia.
 
         # Se acontece algo de errado, grava em um log.
         if not recLog['recpath'].startswith(recpath):
@@ -122,7 +158,10 @@ def parse_rule_label(
         return None # Se não, retorna que a produção é inviavel.
     
     inpc["cursor"] = productions[prodind][1]["cursor"] # Reposiciona o cursor
-    return productions[prodind][0] # Retorna a expansão.
+    toreturn = { 'expansion': productions[prodind][0] } # Retorna a expansão.
+    if not productions[prodind][5] is None:
+        toreturn['type'] = productions[prodind][5]
+    return toreturn if len(toreturn['expansion']) > 0 else {}
 
 def parse_permutations(inpdata, rules, psel={}, pcounter=None, *args, **kwargs):
     '''Tenta interpretar um programa inserido (inpdata) usando as regras fornecidas (rules) através de
@@ -176,13 +215,14 @@ def parse_program(inp, rules, *args, **kwargs):
 
 
 def print_help_msg(autoexit=True):
-    print('Usage: python sintatico.py [-r -s] {input file} {output file}')
-    print('Or:    python sintatico.py [-r -s] {input file}')
-    print('Or:    python sintatico.py [-r -s] -i {output file}')
-    print('Or:    python sintatico.py [-r -s] -i')
+    print('Usage: python sintatico.py [-r -s -t] {input file} {output file}')
+    print('Or:    python sintatico.py [-r -s -t] {input file}')
+    print('Or:    python sintatico.py [-r -s -t] -i {output file}')
+    print('Or:    python sintatico.py [-r -s -t] -i')
     print('Or:    python sintatico.py -h|--help')
     print('Where -r: Supress exceptions on 1-st level left recursion.')
     print('      -s: Show terminal expansions as strings.')
+    print('      -t: Raise an exception when a type error is found.')
     print('      -i: Read input from the stdin.')
     print('      -h or --help: Show this message.')
     if autoexit:
@@ -197,6 +237,7 @@ if __name__ == "__main__":
     cargs = list(filter(lambda x: len(x) != 2 or x[0] != '-', argv[1:]))
     finp, fout = None, None
 
+    __exception_handler['switch'] = not '-t' in argv
     if '-i' in argv:
         finp = ''
         try:
@@ -217,6 +258,8 @@ if __name__ == "__main__":
     rules = read_rules(raiseOnLeftRecursion=(not "-r" in argv))
     p0 = parse_program(finp, rules, simple_terminal=('-s' in argv))
     p0json = json.dumps(p0)
+    if p0 is None:
+        fout = None
 
     if fout is None:
         print(p0json)
