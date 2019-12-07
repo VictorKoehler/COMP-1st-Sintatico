@@ -57,11 +57,11 @@ M|identificador|11
 then|reservado|11
 result|identificador|12
 :=|atribuicao|12
-true|identificador|12
+true|reservado|12
 else|reservado|13
 result|identificador|14
 :=|atribuicao|14
-false|identificador|14
+false|reservado|14
 ;|delimitador|14
 end|reservado|15
 .|delimitador|15
