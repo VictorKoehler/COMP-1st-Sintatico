@@ -64,11 +64,11 @@ class LogTree():
         return {'chart': {'container': "#OrganiseChart-simple"},'nodeStructure': treestruct}
     
     def export_last_tree(self):
-        #return self.export(keep=[self.log[-1]['path'][0]])
-        return self.export(keep=['0'])
+        return self.export(keep=[self.log[-1]['path'][0]])
+        #return self.export(keep=['0'])
 
-    def save_export(self, path):
-        return self.__save(path, self.export())
+    def save_export(self, path, *args, **kwargs):
+        return self.__save(path, self.export(*args, **kwargs))
 
-    def save_export_last_tree(self, path):
-        return self.__save(path, self.export_last_tree())
+    def save_export_last_tree(self, path, *args, **kwargs):
+        return self.__save(path, self.export_last_tree(*args, **kwargs))

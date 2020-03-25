@@ -205,12 +205,13 @@ def parse_program(inp, rules, *args, **kwargs):
 
 
 def print_help_msg(autoexit=True):
-    print('Usage: python sintatico.py [-r -s] {input file} {output file}')
-    print('Or:    python sintatico.py [-r -s] {input file}')
-    print('Or:    python sintatico.py [-r -s] -i {output file}')
-    print('Or:    python sintatico.py [-r -s] -i')
+    print('Usage: python sintatico.py [-r --no-tree -s] {input file} {output file}')
+    print('Or:    python sintatico.py [-r --no-tree -s] {input file}')
+    print('Or:    python sintatico.py [-r --no-tree -s] -i {output file}')
+    print('Or:    python sintatico.py [-r --no-tree -s] -i')
     print('Or:    python sintatico.py -h|--help')
     print('Where -r: Supress exceptions on 1-st level left recursion.')
+    print('      --no-tree: Do not generate a graphical tree with results.')
     print('      -s: Show terminal expansions as strings.')
     print('      -i: Read input from the stdin.')
     print('      -h or --help: Show this message.')
@@ -252,7 +253,11 @@ if __name__ == "__main__":
     p0 = parse_program(finp, rules, simple_terminal=('-s' in argv))
     p0json = json.dumps(p0)
 
-    logt.save_export_last_tree('analise/super-simple.js')
+    if not '--no-tree' in argv:
+        if p0 is None:
+            logt.save_export('analise/super-simple.js', keep=['0'])
+        else:
+            logt.save_export_last_tree('analise/super-simple.js')
 
     if fout is None:
         print(p0json)
