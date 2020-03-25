@@ -50,7 +50,7 @@ np_linha_linha ={
 }
 
 adjetivoopc ={
-    %adjetivo
+    %adjetivo @adjetivoopc
 |   £
 }
 
