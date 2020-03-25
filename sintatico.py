@@ -1,6 +1,9 @@
 from rules_reader import read_rules, empty_char
+from logtree import LogTree
 from sys import argv, stderr
 import json
+
+logt = LogTree()
 
 def parse_rule_label(
     inpc: dict,
@@ -13,6 +16,7 @@ def parse_rule_label(
     loglevel=0,
     emptyExpansion=True,
     recLog=None,
+    pcounter=None
 ):
     """Tenta expandir recursivamente o label (regra) de acordo com a entrada (inpdata) e o cursor dela (inpc).
     Recebe o conjunto de regras (rules) e o nome da regra a ser interpretada (label).
@@ -35,12 +39,16 @@ def parse_rule_label(
         recLog = {}
     if not 'recpath' in recLog:
         recLog['recpath'] = ''
+    if pcounter is None:
+        pcounter = {'counter': 0}
+
+    logTreeSet_title = inpdata[inpc['cursor']]['token']
 
     productions = []
-    for rs in exprules: # Para cada alternativa de expansão da regra:
+    for rsindex, rs in enumerate(exprules): # Para cada alternativa de expansão da regra:
         curs = inpc.copy() # Faça uma cópia de onde está o cursor
         applies = [] # Salva o que será retornado - se será retornado.
-        for r in rs: # Para cada palavra da alternativa
+        for rindex, r in enumerate(rs): # Para cada palavra da alternativa
 
             # Verifica se o cursor já chegou no fim do arquivo.
             if curs["cursor"] >= len(inpdata):
@@ -61,14 +69,28 @@ def parse_rule_label(
                 if act_g: # Se satisfaz o sinal, o token é aceito
                     t = (r + ':' + c['token']) if simple_terminal else { 'symbol': r, 'token': c['token'] }
                     applies.append(t)
+                    recpath_leaf = '->'.join([recpath, label, str(rsindex), r])
+                    logt.append(str(pcounter['counter']) + recpath_leaf, c['token'], [r, rindex], productions)
                     curs["cursor"] += 1
+                    assert curs["cursor"] != inpc["cursor"]
                 else: # Senão, reverte.
                     applies = None
                     break
             
             elif rh == "@": # Invocação de outra regra
-                fullpath = '->'.join([recpath, label, str(exprules.index(rs)), r])
-                reapp = parse_rule_label(curs, inpdata, rules, rt, recsel, fullpath, simple_terminal, loglevel, emptyExpansion, recLog)
+                fullpath = '->'.join([recpath, label, str(rsindex), r])
+                reapp = parse_rule_label(
+                    curs,
+                    inpdata,
+                    rules,
+                    rt,
+                    recsel,
+                    fullpath,
+                    simple_terminal,
+                    loglevel,
+                    emptyExpansion,
+                    recLog,
+                    pcounter=pcounter)
                 if reapp is None: # Se a regra não pode ser derivada, aborta esta expansão.
                     applies = None
                     break
@@ -83,6 +105,10 @@ def parse_rule_label(
             productions.append((applies, curs, empty_char, [empty_char], label))
         else: # Senão, diz que o label produz esta expansão.
             productions.append((applies, curs, r, rs, label))
+
+
+    logTreeSet_path = str(pcounter['counter']) + '->'.join([recpath, label])
+    post_rec_tree = logt.append(logTreeSet_path, logTreeSet_title, None, productions)
 
 
     prodind = 0 # Retorna a única expansão, se possível.
@@ -121,6 +147,7 @@ def parse_rule_label(
         
         return None # Se não, retorna que a produção é inviavel.
     
+    post_rec_tree['ret'] = str(prodind)
     inpc["cursor"] = productions[prodind][1]["cursor"] # Reposiciona o cursor
     return productions[prodind][0] # Retorna a expansão.
 
@@ -137,7 +164,7 @@ def parse_permutations(inpdata, rules, psel={}, pcounter=None, *args, **kwargs):
 
     # Cada ambiguidade de ps consiste de um endereço completo das derivações das regras.
     recLog={}
-    r = parse_rule_label(inpcursor, inpdata, rules, "program", ps, recLog=recLog, *args, **kwargs)
+    r = parse_rule_label(inpcursor, inpdata, rules, "program", ps, recLog=recLog, pcounter=pcounter, *args, **kwargs)
     pcounter['counter'] += 1
     if not r is None: # Se o método foi bem sucedido, retorna-o!
         if pcounter['counter'] != 1:
@@ -164,9 +191,11 @@ def parse_program(inp, rules, *args, **kwargs):
     '''
     def pdt2dict(d):
         dt = d.split("|")
-        return {"token": dt[0], "a": dt[0], "class": dt[1], "line": dt[2]}
+        return {"token": dt[0], "a": dt[0], "class": dt[1], "line": dt[2], "tense": dt[3] if len(dt) >= 4 else ''}
 
-    r, logs = parse_permutations([pdt2dict(d) for d in inp.strip().split("\n")], rules, *args, **kwargs)
+    logt = LogTree()
+    parsedinp = [pdt2dict(d) for d in inp.strip().split("\n")]
+    r, logs = parse_permutations(parsedinp, rules, *args, **kwargs)
     if r is None:
         print('Could not generate a valid program.', file=stderr)
         print('There are {} invalid trees:'.format(len(logs)), file=stderr)
@@ -214,9 +243,16 @@ if __name__ == "__main__":
     if len(cargs) == 1:
         fout = cargs[0]
 
-    rules = read_rules(raiseOnLeftRecursion=(not "-r" in argv))
+    finp = finp.strip()
+    if finp.splitlines()[-1].split('|')[1] != 'paragrafo':
+        finp += '\n|paragrafo|{}|'.format(finp.splitlines()[-1].split('|')[2])
+    finp += '\n&|eof|{}|'.format(finp.splitlines()[-1].split('|')[2])
+
+    rules = read_rules(filename='regras_pt', raiseOnLeftRecursion=(not "-r" in argv))
     p0 = parse_program(finp, rules, simple_terminal=('-s' in argv))
     p0json = json.dumps(p0)
+
+    logt.save_export_last_tree('analise/super-simple.js')
 
     if fout is None:
         print(p0json)
