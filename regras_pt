@@ -1,0 +1,87 @@
+/*
+Parte da gramática aqui desenvolvida foi inspirada do livro
+"A gramática da frase em português: algumas reflexões para a formalização da estrutura frasal em português",
+por Gabriel de Ávila Othero
+*/
+
+
+
+/* Syntax convention
+clear
+*/
+/* Rules declared like name ={ ... } */
+/* Reserved keywords like #name */
+/* Identificators like $id */
+/* Classes of tokens like %rulename */
+/* Subrules invoked by @rulename */
+
+/* Regra inicial */
+program ={
+    @paragrafo_texto %eof
+}
+
+paragrafo_texto ={
+    @frases %paragrafo @paragrafo_texto
+|   £
+}
+
+frases ={
+    @oracao %ponto @frases
+|   £
+}
+
+oracao ={
+    @np @vp
+}
+
+/* Conjugação de nomes/substantivos/pronomes sem separação */
+np ={
+    @adjetivoopc @np_linha
+}
+
+np_linha ={
+    @np_linha_linha @np
+|   £
+}
+
+np_linha_linha ={
+    %pronome
+|   %substantivo @adjetivoopc
+}
+
+adjetivoopc ={
+    %adjetivo
+|   £
+}
+
+vp ={
+    @advérbioopc %verbo @loc_verbal @advérbioopc @vp_complemento
+}
+
+advérbioopc ={
+    %advérbio
+|   £
+}
+
+/* Dois verbos podem se juntar para equivaler por um (locução verbal) */
+loc_verbal ={
+    %verbo
+|   £
+}
+
+/*
+*    Devido a complexidade da língua portuguesa, optou-se por simplificar sentenças do tipo:
+*       -Ele alegou que foi preso injustamente. por
+*       -Ele alegou que "ele foi preso injustamente".-
+*    Isto é, uma frase composta por várias orações deve ser quebrada a priori manualmente na forma de citação.
+*    Felizmente isto pode ser aplicado recursivamente...
+*/
+vp_complemento ={
+    %citacao @oracao @citacaobugada
+|   @np
+|   £
+}
+
+@citacaobugada ={
+    %citacao
+}
