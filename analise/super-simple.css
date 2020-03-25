@@ -1,0 +1,28 @@
+body,div,dl,dt,dd,ul,ol,li,h1,h2,h3,h4,h5,h6,pre,form,fieldset,input,textarea,p,blockquote,th,td { margin:0; padding:0; }
+
+
+body { background: #fff; }
+
+/* optional Container STYLES */
+.node { color: #9CB5ED; border: 2px solid #C8C8C8; border-radius: 3px; min-width: 70px; }
+.node p { font-size: 20px; line-height: 20px; height: 20px; font-weight: bold; padding: 3px; margin: 0; }
+p.node-title {
+    font-size: 10px;
+    color: gray;
+}
+
+/* .chart {
+    overflow-x: unset !important;
+}
+.Treant {
+    position: unset !important;
+    overflow: unset !important;
+    padding: 0 !important;
+} */
+.choosen-node {
+    background-color: #E2EEDF;
+}
+.leaf-node {
+    color: #B560C1;
+}
+
